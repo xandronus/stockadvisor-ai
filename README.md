@@ -20,3 +20,4 @@ Stock portfolio AI advisor using local LLM (via Ollama) and integrated with Yaho
 ## Components
 - MCP Server : [yfinance-mcp](./yfinance-mcp/README.md)
 - Orchestration API : [stockadvisor-api](./stockadvisor-api/README.md)
+- CLI : [cli](./cli/README.md)

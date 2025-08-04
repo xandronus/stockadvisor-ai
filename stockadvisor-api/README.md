@@ -66,7 +66,10 @@ This is the **Orchestrator Service** for the local stock market assistant. It ac
 
 ```bash
 docker build -t stockadvisor-api .
-docker run -p 8001:8001 stockadvisor-api
+docker run --rm -p 8001:8001 \
+  -v ./portfolio.json:/data/portfolio.json \
+  -e PORTFOLIO_JSON_PATH=/data/portfolio.json \
+  stockadvisor-api:latest
 ```
 
 The orchestrator will be available at `http://localhost:8001`.
