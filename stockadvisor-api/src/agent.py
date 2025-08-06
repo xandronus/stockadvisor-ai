@@ -1,24 +1,20 @@
-import os
-import asyncio
-from langchain.agents import initialize_agent, Tool
+import logging
+from langchain.agents import initialize_agent
 from langchain.llms.base import LLM
-from typing import Optional, List, Any, Union
-
-from src.tools import get_ticker_info
 from src.models import Portfolio
+from src.tools import get_ticker_info  # @tool-decorated function
 
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3")
+logging.basicConfig(level=logging.INFO)
+
+OLLAMA_BASE_URL = "http://host.docker.internal:11434"
+OLLAMA_MODEL = "phi4-mini:3.8b"
 
 class OllamaLLM(LLM):
-    """LangChain LLM wrapper for Ollama API."""
-
     model_name: str = OLLAMA_MODEL
     base_url: str = OLLAMA_BASE_URL
 
-    def _call(self, prompt: str, stop: Optional[List[str]] = None) -> str:
+    def _call(self, prompt: str, stop=None) -> str:
         import requests
-
         response = requests.post(
             f"{self.base_url}/api/generate",
             json={"model": self.model_name, "prompt": prompt, "stream": False},
@@ -28,59 +24,55 @@ class OllamaLLM(LLM):
         return response.json().get("response", "").strip()
 
     @property
-    def _identifying_params(self) -> dict:
+    def _identifying_params(self):
         return {"model_name": self.model_name}
 
     @property
-    def _llm_type(self) -> str:
+    def _llm_type(self):
         return "ollama"
 
 
-def get_ticker_info_sync(symbol: str) -> str:
-    import asyncio
-    result = asyncio.run(get_ticker_info(symbol))
-    return str(result)
-
-
-mcp_tool = Tool(
-    name="get_ticker_info",
-    func=get_ticker_info_sync,
-    description="Fetch real-time ticker info given a stock symbol.",
-)
-
 def create_agent():
     llm = OllamaLLM()
-    tools = [mcp_tool]
+    tools = [get_ticker_info]
+
     agent = initialize_agent(
-        tools, llm, agent="zero-shot-react-description", verbose=True
+        tools,
+        llm,
+        agent="zero-shot-react-description",
+        verbose=True,
+        handle_parsing_errors=True,
     )
     return agent
 
 
-async def respond_to_query(question: str, portfolio: Union[Portfolio, dict]) -> str:
+def respond_to_query(question: str, portfolio: Portfolio | dict) -> str:
+    """
+    Ask the LLM a question about the user's portfolio and let it use
+    the get_ticker_info tool if needed.
+    """
     agent = create_agent()
 
-    # Convert dict to Portfolio if needed
     if isinstance(portfolio, dict):
         portfolio = Portfolio.parse_obj(portfolio)
 
-    holdings = portfolio.holdings
-    portfolio_str = (
-        "\n".join(
-            f"- {h.shares} shares of {h.symbol} at ${h.purchase_price}"
-            for h in holdings
-        )
-        if holdings
-        else "The portfolio is empty."
-    )
+    holdings_str = "\n".join(
+        f"- {h.shares} shares of {h.symbol} at ${h.purchase_price}"
+        for h in portfolio.holdings
+    ) or "The portfolio is empty."
 
     prompt = (
         f"You are a stock market assistant. The user has the following portfolio:\n"
-        f"{portfolio_str}\n\n"
-        f"User question: {question}\n"
-        f"Use available tools if needed to answer."
+        f"{holdings_str}\n\n"
+        f"User question: {question}\n\n"
+        f"You have access to a tool called get_ticker_info.\n"
+        f"When you want to use this tool, output exactly:\n"
+        f"Action: get_ticker_info\n"
+        f"Action Input: {{\"symbol\": \"<TICKER>\"}}\n\n"
+        f"Replace <TICKER> with the stock symbol you want.\n"
+        f"Do NOT add any extra text, Thought, or commentary.\n"
+        f"After the tool response, provide only:\n"
+        f"Final Answer: <your answer here>\n"
     )
 
-    loop = asyncio.get_event_loop()
-    response = await loop.run_in_executor(None, agent.run, prompt)
-    return response
+    return agent.run(prompt)

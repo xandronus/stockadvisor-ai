@@ -13,4 +13,4 @@ COPY ./src ./src
 
 ENV ORCHESTRATOR_URL=http://host.docker.internal:8001/query
 
-ENTRYPOINT ["python", "src/cli.py"]
+ENTRYPOINT ["python", "src/main.py"]

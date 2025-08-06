@@ -23,9 +23,7 @@ docker build -t stock-portfolio-cli .
 
 Run the CLI container, linking it to your local orchestrator:
 
-docker run --rm -it \
-  -e ORCHESTRATOR_URL="http://host.docker.internal:8001/query" \
-  stock-portfolio-cli
+docker run --rm -it -e ORCHESTRATOR_URL="http://host.docker.internal:8001/query" stock-portfolio-cli
 
 > **Note:**  
 > - On macOS/Windows, `host.docker.internal` resolves to the host machine from inside Docker.  
